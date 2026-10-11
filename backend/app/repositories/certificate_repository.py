@@ -1,0 +1,1 @@
+"""Certificate repository placeholder."""

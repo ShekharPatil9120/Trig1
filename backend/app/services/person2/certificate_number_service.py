@@ -1,0 +1,1 @@
+"""Certificate numbering service placeholder."""
