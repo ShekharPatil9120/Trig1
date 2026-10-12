@@ -53,3 +53,56 @@ class AdmissionRegistrationRead(BaseModel):
     academic_year: str
     class_name: str
     section_name: str
+
+
+class BulkAdmissionError(BaseModel):
+    row_number: int
+    column: str
+    value: str | None = None
+    message: str
+    suggestion: str | None = None
+
+
+class BulkAdmissionPreviewRow(BaseModel):
+    row_number: int
+    status: str
+    admission_date: date | None = None
+    academic_year: str | None = None
+    class_admitted: str | None = None
+    section: str | None = None
+    admission_type: str | None = None
+    registration_number: str | None = None
+    student_name: str | None = None
+    date_of_birth: date | None = None
+    gender: str | None = None
+    parent_phone: str | None = None
+    errors: list[BulkAdmissionError] = []
+
+
+class BulkAdmissionValidationResponse(BaseModel):
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    duplicate_rows: int
+    rows: list[BulkAdmissionPreviewRow]
+    errors: list[BulkAdmissionError] = []
+    academic_years_to_create: list[str] = []
+    classes_to_create: list[str] = []
+    sections_to_create: list[str] = []
+
+
+class BulkAdmissionImportSummary(BaseModel):
+    rows_processed: int
+    imported: int
+    invalid_rows: int
+    duplicate_rows: int
+    failed_rows: int
+    academic_years_created: list[str] = []
+    classes_created: list[str] = []
+    sections_created: list[str] = []
+
+
+class BulkAdmissionImportResponse(BaseModel):
+    summary: BulkAdmissionImportSummary
+    imported_records: list[AdmissionRegistrationRead] = []
+    validation: BulkAdmissionValidationResponse

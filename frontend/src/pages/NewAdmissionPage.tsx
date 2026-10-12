@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { AlertCircle, ArrowLeft, CheckCircle2, ChevronRight, FileText, ShieldAlert, UserPlus } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, ChevronRight, FileSpreadsheet, FileText, ShieldAlert, UserPlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AdmissionDetailsForm from "../components/admissions/AdmissionDetailsForm";
 import AdmissionReview from "../components/admissions/AdmissionReview";
 import AdmissionSuccess from "../components/admissions/AdmissionSuccess";
+import BulkAdmissionUpload from "../components/admissions/BulkAdmissionUpload";
 import DocumentUploadForm from "../components/admissions/DocumentUploadForm";
 import ParentDetailsForm from "../components/admissions/ParentDetailsForm";
 import PreviousEducationForm from "../components/admissions/PreviousEducationForm";
@@ -243,6 +244,7 @@ function validateForm(values: AdmissionFormState): FormErrors {
 
 export default function NewAdmissionPage() {
   const navigate = useNavigate();
+  const [admissionMode, setAdmissionMode] = useState<"single" | "bulk">("single");
   const [values, setValues] = useState<AdmissionFormState>(initialState);
   const [errors, setErrors] = useState<FormErrors>({});
   const [activeSection, setActiveSection] = useState<SectionKey>("details");
@@ -390,6 +392,13 @@ export default function NewAdmissionPage() {
     setSubmittedAdmission(null);
   };
 
+  const switchAdmissionMode = (mode: "single" | "bulk") => {
+    setAdmissionMode(mode);
+    setIsReviewMode(false);
+    setSubmissionNotice(null);
+    setSubmittedAdmission(null);
+  };
+
   const sectionContent = (
     <div className="space-y-6">
       <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
@@ -471,7 +480,38 @@ export default function NewAdmissionPage() {
         />
       </div>
 
-      {submittedAdmission ? (
+      <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => switchAdmissionMode("single")}
+            className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition ${
+              admissionMode === "single"
+                ? "border-blue-700 bg-blue-700 text-white"
+                : "border-slate-300 bg-white text-slate-700 hover:border-blue-200 hover:text-blue-700"
+            }`}
+          >
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            Single Admission
+          </button>
+          <button
+            type="button"
+            onClick={() => switchAdmissionMode("bulk")}
+            className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition ${
+              admissionMode === "bulk"
+                ? "border-blue-700 bg-blue-700 text-white"
+                : "border-slate-300 bg-white text-slate-700 hover:border-blue-200 hover:text-blue-700"
+            }`}
+          >
+            <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+            Bulk Admission (Excel/CSV Upload)
+          </button>
+        </div>
+      </div>
+
+      {admissionMode === "bulk" ? (
+        <BulkAdmissionUpload />
+      ) : submittedAdmission ? (
         <AdmissionSuccess
           values={values}
           registration={submittedAdmission}
@@ -502,7 +542,7 @@ export default function NewAdmissionPage() {
         </div>
       ) : null}
 
-      {!isReviewMode && !submittedAdmission ? (
+      {admissionMode === "single" && !isReviewMode && !submittedAdmission ? (
         <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:justify-between">
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <FileText className="h-4 w-4 text-blue-700" aria-hidden="true" />
