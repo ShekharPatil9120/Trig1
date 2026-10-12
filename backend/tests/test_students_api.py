@@ -1,4 +1,5 @@
 from datetime import date
+import io
 from collections.abc import Generator
 
 import pytest
@@ -219,3 +220,173 @@ def test_admission_registration_persists_and_is_searchable(client: TestClient, d
     unrelated_filter = client.get("/api/v1/students", params={"search": "Test Student Search 2026 XYZ01", "class_id": 999, "page_size": 100})
     assert unrelated_filter.status_code == 200
     assert unrelated_filter.json()["total"] == 0
+
+
+def _bulk_csv(rows: list[dict[str, str]]) -> bytes:
+    headers = [
+        "Admission Date",
+        "Academic Year",
+        "Class Admitted",
+        "Section",
+        "Admission Type",
+        "Student Name",
+        "Date of Birth",
+        "Gender",
+        "Registration Number",
+        "Guardian Name",
+        "Parent Phone",
+        "Parent Address",
+        "Previous School",
+        "Previous Class",
+        "Previous TC Number",
+    ]
+    output = io.StringIO()
+    output.write(",".join(headers) + "\n")
+    for row in rows:
+        output.write(",".join(f'"{row.get(header, "")}"' for header in headers) + "\n")
+    return output.getvalue().encode("utf-8")
+
+
+def test_bulk_admission_template_downloads(client: TestClient) -> None:
+    csv_response = client.get("/api/v1/admissions/bulk/template", params={"format": "csv"})
+    assert csv_response.status_code == 200
+    assert "Admission Date" in csv_response.text
+
+    xlsx_response = client.get("/api/v1/admissions/bulk/template")
+    assert xlsx_response.status_code == 200
+    assert xlsx_response.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def test_bulk_admission_validates_and_imports_valid_csv(client: TestClient, db_session: Session) -> None:
+    content = _bulk_csv(
+        [
+            {
+                "Admission Date": "2026-10-11",
+                "Academic Year": "2026-27",
+                "Class Admitted": "Class 7",
+                "Section": "D",
+                "Admission Type": "New Admission",
+                "Student Name": "Bulk Student One",
+                "Date of Birth": "2016-05-20",
+                "Gender": "Female",
+                "Registration Number": "BULK-001",
+                "Guardian Name": "Bulk Guardian One",
+                "Parent Phone": "9000000011",
+                "Parent Address": "Bulk test address",
+            },
+            {
+                "Admission Date": "2026-10-11",
+                "Academic Year": "2026-27",
+                "Class Admitted": "Class 7",
+                "Section": "D",
+                "Admission Type": "New Admission",
+                "Student Name": "Bulk Student Two",
+                "Date of Birth": "2016-06-20",
+                "Gender": "Male",
+                "Registration Number": "BULK-002",
+                "Guardian Name": "Bulk Guardian Two",
+                "Parent Phone": "9000000012",
+                "Parent Address": "Bulk test address",
+            },
+        ]
+    )
+
+    validate_response = client.post("/api/v1/admissions/bulk/validate", files={"file": ("students.csv", content, "text/csv")})
+    assert validate_response.status_code == 200
+    validation = validate_response.json()
+    assert validation["valid_rows"] == 2
+    assert validation["invalid_rows"] == 0
+    assert validation["duplicate_rows"] == 0
+    assert validation["classes_to_create"] == ["Class 7"]
+
+    import_response = client.post("/api/v1/admissions/bulk/import", files={"file": ("students.csv", content, "text/csv")})
+    assert import_response.status_code == 200
+    summary = import_response.json()["summary"]
+    assert summary["rows_processed"] == 2
+    assert summary["imported"] == 2
+    assert summary["invalid_rows"] == 0
+
+    students = db_session.execute(select(Student).where(Student.name.in_(["Bulk Student One", "Bulk Student Two"]))).scalars().all()
+    assert len(students) == 2
+    assert {student.admission_number for student in students} == {"ADM/2026/0001", "ADM/2026/0002"}
+
+
+def test_bulk_admission_reports_missing_required_columns(client: TestClient) -> None:
+    content = b"Student Name,Admission Date\nMissing Headers,2026-10-11\n"
+
+    response = client.post("/api/v1/admissions/bulk/validate", files={"file": ("students.csv", content, "text/csv")})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["valid_rows"] == 0
+    assert payload["invalid_rows"] == 1
+    assert any("Required column" in error["message"] for error in payload["errors"])
+
+
+def test_bulk_admission_reports_invalid_and_duplicate_rows_without_importing_them(client: TestClient, db_session: Session) -> None:
+    seed_students(db_session)
+    content = _bulk_csv(
+        [
+            {
+                "Admission Date": "2026-10-11",
+                "Academic Year": "2026-27",
+                "Class Admitted": "Class 1",
+                "Section": "A",
+                "Admission Type": "New Admission",
+                "Student Name": "Ananya Rao",
+                "Date of Birth": "2018-04-12",
+                "Gender": "Female",
+                "Registration Number": "BULK-EXISTING-ID",
+                "Guardian Name": "Meera Rao",
+                "Parent Phone": "9876543210",
+            },
+            {
+                "Admission Date": "bad-date",
+                "Academic Year": "2026-27",
+                "Class Admitted": "Class 2",
+                "Section": "B",
+                "Admission Type": "New Admission",
+                "Student Name": "Invalid Date Student",
+                "Date of Birth": "2017-01-01",
+                "Gender": "Male",
+                "Registration Number": "BULK-INVALID",
+            },
+            {
+                "Admission Date": "2026-10-11",
+                "Academic Year": "2026-27",
+                "Class Admitted": "Class 3",
+                "Section": "C",
+                "Admission Type": "New Admission",
+                "Student Name": "Valid Mixed Student",
+                "Date of Birth": "2017-02-02",
+                "Gender": "Other",
+                "Registration Number": "BULK-VALID-MIXED",
+                "Parent Phone": "9000000013",
+            },
+        ]
+    )
+
+    validate_response = client.post("/api/v1/admissions/bulk/validate", files={"file": ("students.csv", content, "text/csv")})
+    assert validate_response.status_code == 200
+    validation = validate_response.json()
+    assert validation["valid_rows"] == 1
+    assert validation["invalid_rows"] == 1
+    assert validation["duplicate_rows"] == 1
+
+    import_response = client.post("/api/v1/admissions/bulk/import", files={"file": ("students.csv", content, "text/csv")})
+    assert import_response.status_code == 200
+    summary = import_response.json()["summary"]
+    assert summary["imported"] == 1
+    assert summary["invalid_rows"] == 1
+    assert summary["duplicate_rows"] == 1
+
+    assert db_session.execute(select(Student).where(Student.name == "Valid Mixed Student")).scalar_one_or_none() is not None
+    assert db_session.execute(select(Student).where(Student.name == "Invalid Date Student")).scalar_one_or_none() is None
+
+
+def test_bulk_admission_rejects_unsupported_and_empty_files(client: TestClient) -> None:
+    unsupported = client.post("/api/v1/admissions/bulk/validate", files={"file": ("students.txt", b"hello", "text/plain")})
+    assert unsupported.status_code == 400
+
+    empty = client.post("/api/v1/admissions/bulk/validate", files={"file": ("students.csv", b"", "text/csv")})
+    assert empty.status_code == 400
