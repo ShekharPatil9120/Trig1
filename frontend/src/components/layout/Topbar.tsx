@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import { academicYear } from "../../data/dashboardDemoData";
 import { academicYearOptions } from "../../data/admissionOptions";
 import { MobileMenuButton } from "./Sidebar";
+import SchoolLogo, { schoolName } from "./SchoolLogo";
 
 type TopbarProps = {
   onOpenMobile: () => void;
@@ -70,11 +71,9 @@ export default function Topbar({ onOpenMobile }: TopbarProps) {
         </label>
 
         <div className="flex min-h-10 items-center gap-3 rounded-md border border-slate-200 bg-white px-2 py-1">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-900 text-xs font-semibold text-white">
-            GS
-          </div>
+          <SchoolLogo className="h-8 w-8 border border-slate-200" />
           <div className="hidden min-w-0 sm:block">
-            <p className="truncate text-sm font-semibold text-slate-900">Greenfield School</p>
+            <p className="truncate text-sm font-semibold text-slate-900">{schoolName}</p>
             <p className="truncate text-xs text-slate-500">Office Desk</p>
           </div>
         </div>

@@ -3,6 +3,7 @@ export type StudentStatus = "active" | "transferred" | "left_school" | "complete
 export type StudentRegisterItem = {
   id: number;
   admission_number: string | null;
+  registration_number?: string | null;
   student_id: string | null;
   name: string;
   class_id: number | null;

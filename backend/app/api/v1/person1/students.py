@@ -126,6 +126,7 @@ def _to_register_item(student: Student) -> StudentRegisterItem:
     return StudentRegisterItem(
         id=student.id,
         admission_number=student.admission_number or (admission.admission_number if admission else None),
+        registration_number=admission.registration_number if admission else None,
         student_id=student.student_id,
         name=student.name,
         class_id=class_record.id if class_record else None,

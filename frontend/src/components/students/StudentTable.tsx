@@ -11,11 +11,13 @@ type StudentTableProps = {
 
 export default function StudentTable({ students }: StudentTableProps) {
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <div className="overflow-x-auto">
       <table className="min-w-[1120px] divide-y divide-slate-200 text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <tr>
             <th className="px-4 py-3">Admission Number</th>
+            <th className="px-4 py-3">Registration Number</th>
             <th className="px-4 py-3">Student Name</th>
             <th className="px-4 py-3">Student ID</th>
             <th className="px-4 py-3">Class</th>
@@ -34,6 +36,7 @@ export default function StudentTable({ students }: StudentTableProps) {
           {students.map((student) => (
             <tr key={student.id} className="hover:bg-slate-50">
               <td className="px-4 py-3 font-medium text-slate-900">{show(student.admission_number)}</td>
+              <td className="px-4 py-3 font-medium text-slate-900">{show(student.registration_number)}</td>
               <td className="px-4 py-3 font-semibold text-slate-950">{student.name}</td>
               <td className="px-4 py-3 text-slate-600">{show(student.student_id)}</td>
               <td className="px-4 py-3 text-slate-600">{show(student.class_name)}</td>
@@ -48,6 +51,7 @@ export default function StudentTable({ students }: StudentTableProps) {
                 <StudentStatusBadge status={student.status} />
               </td>
               <td className="px-4 py-3 text-right">
+                <div className="flex justify-end gap-2">
                 <Link
                   to={`/students/${student.id}`}
                   className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
@@ -55,11 +59,13 @@ export default function StudentTable({ students }: StudentTableProps) {
                   <Eye className="h-4 w-4" aria-hidden="true" />
                   View
                 </Link>
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,6 @@ import {
   BookUser,
   ChevronLeft,
   ClipboardList,
-  GraduationCap,
   LayoutDashboard,
   Menu,
   School,
@@ -13,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import SchoolLogo, { schoolName } from "./SchoolLogo";
 
 type SidebarProps = {
   isCollapsed: boolean;
@@ -68,12 +68,10 @@ export default function Sidebar({
 
       <aside className={asideClasses}>
         <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-blue-700 text-white">
-            <GraduationCap className="h-6 w-6" aria-hidden="true" />
-          </div>
+          <SchoolLogo className="h-10 w-10 border border-slate-200" />
           {!isCollapsed ? (
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-950">Greenfield School</p>
+              <p className="truncate text-sm font-semibold text-slate-950">{schoolName}</p>
               <p className="truncate text-xs text-slate-500">Student Records</p>
             </div>
           ) : null}

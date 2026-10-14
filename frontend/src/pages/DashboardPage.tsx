@@ -6,6 +6,7 @@ import StudentsByClassChart from "../components/dashboard/StudentsByClassChart";
 import StudentsByGenderChart from "../components/dashboard/StudentsByGenderChart";
 import { ButtonLink } from "../components/ui/Button";
 import PageHeader from "../components/ui/PageHeader";
+import SchoolLogo, { schoolName } from "../components/layout/SchoolLogo";
 import { academicYear, dashboardStats, demoNotice } from "../data/dashboardDemoData";
 
 export default function DashboardPage() {
@@ -13,11 +14,17 @@ export default function DashboardPage() {
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
       <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <PageHeader
-            eyebrow={`Academic Year ${academicYear}`}
-            title="School Overview"
-            description="Manage student records, admissions and school certificates from one place."
-          />
+          <div className="flex min-w-0 items-center gap-4">
+            <SchoolLogo className="h-14 w-14 border border-slate-200 sm:h-16 sm:w-16" />
+            <div className="min-w-0">
+              <p className="mb-1 text-sm font-semibold text-blue-800">{schoolName}</p>
+              <PageHeader
+                eyebrow={`Academic Year ${academicYear}`}
+                title="School Overview"
+                description="Manage student records, admissions and school certificates from one place."
+              />
+            </div>
+          </div>
           <div className="flex flex-col gap-3 sm:flex-row lg:shrink-0">
             <ButtonLink to="/admissions/new" icon={UserPlus}>
               New Admission

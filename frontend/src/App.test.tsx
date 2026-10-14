@@ -145,6 +145,8 @@ describe("dashboard", () => {
     renderApp();
 
     expect(screen.getByRole("heading", { name: /school overview/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Vivekananda School")).toHaveLength(3);
+    expect(screen.getAllByRole("img", { name: /swami vivekananda emblem/i })).toHaveLength(3);
     expect(screen.getByText(/demo data notice/i)).toBeInTheDocument();
     expect(screen.getByText(/total active students/i)).toBeInTheDocument();
     expect(screen.getByText(/students by class/i)).toBeInTheDocument();
@@ -269,6 +271,77 @@ describe("student register", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
     renderApp("/students");
     expect(await screen.findByText(/student register unavailable/i)).toBeInTheDocument();
+  });
+
+  it("keeps certificate downloads out of the student register", async () => {
+    mockStudentFetch();
+    renderApp("/students");
+
+    await screen.findByText("Ananya Rao");
+    expect(screen.queryByRole("button", { name: /download registration certificate/i })).not.toBeInTheDocument();
+  });
+
+  it("generates a registration certificate from the Certificates page", async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn(() => "blob:registration-certificate");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          { id: "registration", name: "Registration Certificate" },
+          { id: "bonafide", name: "Bonafide Certificate" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => studentResponse(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'attachment; filename="Registration_Certificate_Ananya_Rao.pdf"' },
+        blob: async () => new Blob(["pdf"], { type: "application/pdf" }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderApp("/certificates");
+
+    await user.type(await screen.findByLabelText(/enter student name/i), "Ananya");
+    await user.click(await screen.findByRole("option", { name: /Ananya Rao/ }));
+    await user.click(screen.getByRole("button", { name: /generate certificate/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("/api/v1/certificates/generate/1?certificate_type=registration")));
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:registration-certificate");
+  });
+
+  it("shows a clear error when certificate generation fails", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ id: "registration", name: "Registration Certificate" }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => studentResponse(),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderApp("/certificates");
+
+    await user.type(await screen.findByLabelText(/enter student name/i), "Ananya");
+    await user.click(await screen.findByRole("option", { name: /Ananya Rao/ }));
+    await user.click(screen.getByRole("button", { name: /generate certificate/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/student record was not found/i);
   });
 });
 

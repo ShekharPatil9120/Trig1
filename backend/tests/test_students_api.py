@@ -4,6 +4,7 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
+from pypdf import PdfReader
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -54,11 +55,12 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
 
 def seed_students(db: Session) -> None:
+    school = School(id=1, name="Vivekananda School", address="12 School Road", phone="0801234567")
     academic_year = AcademicYear(id=1, name="2026-27")
-    class_one = Class(id=1, name="Class 1")
-    class_two = Class(id=2, name="Class 2")
-    section_a = Section(id=1, name="A")
-    section_b = Section(id=2, name="B")
+    class_one = Class(id=1, name="Class 1", school_id=1)
+    class_two = Class(id=2, name="Class 2", school_id=1)
+    section_a = Section(id=1, name="A", school_id=1)
+    section_b = Section(id=2, name="B", school_id=1)
     first = Student(
         id=1,
         student_id="STU-001",
@@ -82,17 +84,22 @@ def seed_students(db: Session) -> None:
         status="transferred",
     )
     third = Student(id=3, student_id="STU-003", name="No Parent", status="archived")
-    db.add_all([academic_year, class_one, class_two, section_a, section_b, first, second, third])
+    db.add_all([school, academic_year, class_one, class_two, section_a, section_b, first, second, third])
     db.flush()
     db.add_all(
         [
             Parent(student_id=1, guardian_name="Meera Rao", phone="9876543210"),
             Parent(student_id=2, father_name="Dev Nair", phone="9876500000"),
-            Admission(student_id=1, admission_number="ADM-001", admission_date=date(2026, 10, 11), academic_year_id=1, class_id=1, section_id=1),
-            Admission(student_id=2, admission_number="ADM-002", admission_date=date(2026, 10, 12), academic_year_id=1, class_id=2, section_id=2),
+            Admission(student_id=1, admission_number="ADM-001", registration_number="REG-001", admission_date=date(2026, 10, 11), academic_year_id=1, class_id=1, section_id=1),
+            Admission(student_id=2, admission_number="ADM-002", registration_number="REG-002", admission_date=date(2026, 10, 12), academic_year_id=1, class_id=2, section_id=2),
         ]
     )
     db.commit()
+
+
+def pdf_text(content: bytes) -> str:
+    reader = PdfReader(io.BytesIO(content))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
 def test_empty_student_database(client: TestClient) -> None:
@@ -112,10 +119,15 @@ def test_listing_search_filter_and_missing_optional_relationships(client: TestCl
     assert response.status_code == 200
     assert payload["total"] == 3
     assert payload["items"][0]["parent_guardian_name"] == "Meera Rao"
+    assert payload["items"][0]["registration_number"] == "REG-001"
 
     search_by_name = client.get("/api/v1/students", params={"search": "kabir"}).json()
     assert search_by_name["total"] == 1
     assert search_by_name["items"][0]["admission_number"] == "ADM-002"
+
+    search_by_registration_number = client.get("/api/v1/students", params={"search": "REG-002"}).json()
+    assert search_by_registration_number["total"] == 1
+    assert search_by_registration_number["items"][0]["name"] == "Kabir Nair"
 
     search_by_parent_phone = client.get("/api/v1/students", params={"search": "9876543210"}).json()
     assert search_by_parent_phone["total"] == 1
@@ -161,6 +173,80 @@ def test_recent_admission_sort_uses_real_admission_dates(client: TestClient, db_
 
     invalid = client.get("/api/v1/students", params={"sort_by": "demo"})
     assert invalid.status_code == 422
+
+
+def test_registration_certificate_download_uses_student_data(client: TestClient, db_session: Session) -> None:
+    seed_students(db_session)
+
+    response = client.get("/api/v1/certificates/generate/1", params={"certificate_type": "registration"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"] == 'attachment; filename="Registration_Certificate_Ananya_Rao.pdf"'
+    content = response.content
+    assert content.startswith(b"%PDF")
+    text = pdf_text(content)
+    assert "Ananya Rao" in text
+    assert "REG-001" in text
+    assert "ADM-001" in text
+    assert "2026-27" in text
+    assert "Class 1 / A" in text
+    assert "11 October 2026" in text
+    assert "12 April 2018" in text
+    assert "Meera Rao" in text
+    assert "Vivekananda School" in text
+
+
+def test_registration_certificate_differs_by_student_and_404s(client: TestClient, db_session: Session) -> None:
+    seed_students(db_session)
+
+    first = client.get("/api/v1/certificates/generate/1", params={"certificate_type": "registration"})
+    second = client.get("/api/v1/certificates/generate/2", params={"certificate_type": "registration"})
+    missing = client.get("/api/v1/certificates/generate/999", params={"certificate_type": "registration"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert missing.status_code == 404
+    first_text = pdf_text(first.content)
+    second_text = pdf_text(second.content)
+    assert "Ananya Rao" in first_text
+    assert "Kabir Nair" in second_text
+    assert "REG-001" in first_text
+    assert "REG-002" in second_text
+    assert first.content != second.content
+    assert second.headers["content-disposition"] == 'attachment; filename="Registration_Certificate_Kabir_Nair.pdf"'
+
+
+def test_registration_certificate_handles_missing_student_fields(client: TestClient, db_session: Session) -> None:
+    seed_students(db_session)
+
+    response = client.get("/api/v1/certificates/generate/3", params={"certificate_type": "registration"})
+
+    assert response.status_code == 200
+    text = pdf_text(response.content)
+    assert "No Parent" in text
+    assert "Registration Number" in text
+    assert "Class Teacher" in text
+    assert "Head Teacher / Principal" in text
+    assert "School Seal" in text
+
+
+def test_certificate_types_and_selected_template_are_used(client: TestClient, db_session: Session) -> None:
+    seed_students(db_session)
+
+    types_response = client.get("/api/v1/certificates/types")
+    assert [item["id"] for item in types_response.json()] == ["registration", "bonafide", "study", "character", "transfer"]
+
+    response = client.get("/api/v1/certificates/generate/1", params={"certificate_type": "bonafide"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "Bonafide_Certificate_Ananya_Rao.pdf" in response.headers["content-disposition"]
+    text = pdf_text(response.content)
+    assert "Bonafide Certificate" in text
+    assert "Vivekananda School" in text
+    assert "Ananya Rao" in text
+    assert "REG-001" in text
 
 
 def test_admission_registration_persists_and_is_searchable(client: TestClient, db_session: Session) -> None:

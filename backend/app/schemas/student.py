@@ -25,6 +25,7 @@ class StudentRead(StudentBase):
 class StudentRegisterItem(BaseModel):
     id: int
     admission_number: str | None = None
+    registration_number: str | None = None
     student_id: str | None = None
     name: str
     class_id: int | None = None
